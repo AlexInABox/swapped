@@ -7,130 +7,172 @@ using CommandSystem;
 using LabApi.Features.Console;
 using LabApi.Features.Wrappers;
 using PlayerRoles;
-using MEC;
 
 namespace Swapped.Commands;
 
 [CommandHandler(typeof(ClientCommandHandler))]
-// ReSharper disable once UnusedType.Global
 public class Swap : ICommand
 {
     public string Command => "swap";
     public string[] Aliases => [];
-    public string Description => "Swap to a different SCP role!";
+    public string Description => "Wechsle zu einer anderen SCP-Rolle!";
 
-    public async bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+    public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
         if (!Plugin.Instance.SwapEnabled)
         {
-            response = "Du kannst nur in den ersten 40 Sekunden der Runde dein Rolle wechseln!";
+            response = "Du kannst deine Rolle nur in den ersten 40 Sekunden der Runde wechseln!";
             return false;
         }
 
         if (sender == null)
         {
-            response = "You must be a player to use this command.";
+            response = "Nur Spieler können diesen Befehl verwenden.";
             return false;
         }
 
         Player player = Player.Get(sender);
-
         if (player == null)
         {
-            response = "Player not found.";
+            response = "Spieler nicht gefunden.";
             return false;
         }
 
-        if (arguments.Array == null)
+        if (arguments.Count < 1)
         {
-            response =
-                "Willst du mich verarschen? Schreibe z.B.: \".swap 173\" um deine Rolle zu wechseln. Bist du blöd?";
+            response = "Bitte gib eine SCP-Nummer an, z. B.: \".swap 173\"";
             return false;
         }
 
         if (!Plugin.Instance.PlayersThatCanUseSwap.Contains(player))
         {
-            response = "Du bist kein SCP! lol vollidiot...";
+            response = "Du bist kein SCP und kannst daher deine Rolle nicht wechseln!";
             return false;
         }
 
-        bool success = false;
-        if (arguments.Array[1].Contains("173"))
+        string arg = arguments.Array?[1] ?? string.Empty;
+        response = "";
+
+        if (arg.Contains("173"))
         {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp173);
-            response = success ? "You will swap to 173" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("939"))
-        {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp939);
-            response = success ? "You will swap to 939" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("079"))
-        {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp079);
-            response = success ? "You will swap to 079" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("049"))
-        {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp049);
-            response = success ? "You will swap to 049" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("096"))
-        {
-            success = await SwapPlayerToScp(player, RoleTypeId.Scp096);
-            response = success ? "You will swap to 096" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("106"))
-        {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp106);
-            response = success ? "You will swap to 106" : "You don't have enough ZVC to do that!";
-        }
-        else if (arguments.Array[1].Contains("3114"))
-        {
-            success = SwapPlayerToScp(player, RoleTypeId.Scp3114);
-            response = success ? "You will swap to 3114" : "You don't have enough ZVC to do that!";
-        }
-        else
-        {
-            response = "You must choose a valid SCP role!";
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp173);
+            return true;
         }
 
-        
-        return true;
+        if (arg.Contains("939"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp939);
+            return true;
+        }
+
+        if (arg.Contains("079"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp079);
+            return true;
+        }
+
+        if (arg.Contains("049"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp049);
+            return true;
+        }
+
+        if (arg.Contains("096"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp096);
+            return true;
+        }
+
+        if (arg.Contains("106"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp106);
+            return true;
+        }
+
+        if (arg.Contains("3114"))
+        {
+            _ = SwapPlayerToScp(player, RoleTypeId.Scp3114);
+            return true;
+        }
+
+        response = "Bitte gib eine gültige SCP-Rolle an!";
+        return false;
     }
 
-    private static async Task<bool> SwapPlayerToScp(Player player, RoleTypeId role)
+    private static async Task SwapPlayerToScp(Player player, RoleTypeId role)
     {
-        try
+        if (player.Role == role)
         {
-            string url = $"{Config.EndpointUrl}/swap/?userid={player.UserId}&price={Plugin.Instance.RoleCosts[role]}";
-            Logger.Debug($"Sending POST swap request to: {url}");
-
-            using (HttpClient client = new())
-            {
-                client.DefaultRequestHeaders.Add("Authorization", Config.ApiKey);
-
-                HttpResponseMessage response = await client.PostAsync(url, null);
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    Logger.Warn($"Swap request failed with status code: {response.StatusCode}");
-                    return false;
-                }
-
-                Logger.Info("Swap request successful (200 OK).");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Failed to send swap request: {ex}");
-            return false;
+            player.SendConsoleMessage($"Du bist bereits {role}!", "red");
+            return;
         }
 
+        if (!Plugin.Instance.AvailableScps.Contains(role))
+        {
+            player.SendConsoleMessage($"Die Rolle {role} ist bereits belegt oder nicht verfügbar.", "red");
+            return;
+        }
+
+        // Remove role from swappable pool while the request is loading
+        Plugin.Instance.AvailableScps = Plugin.Instance.AvailableScps
+            .Where(r => r != role)
+            .ToArray();
+
+        //Remove player from being able to resubmit a swap request
         Plugin.Instance.PlayersThatCanUseSwap =
             Plugin.Instance.PlayersThatCanUseSwap.Where(p => p != player).ToArray();
 
+
+        try
+        {
+            string url =
+                $"{Plugin.Instance.Config!.EndpointUrl}/swapped/?userid={player.UserId}&price={Plugin.Instance.RoleCosts[role]}";
+            Logger.Debug($"Sende Swap-POST-Anfrage an: {url}");
+
+            using HttpClient client = new();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + Plugin.Instance.Config!.ApiKey);
+            HttpResponseMessage response = await client.PostAsync(url, null);
+
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                Logger.Debug(
+                    $"Swap-Anfrage für {player.Nickname} fehlgeschlagen (Statuscode: {response.StatusCode})");
+
+                //Reset original state
+                Plugin.Instance.AvailableScps = Plugin.Instance.AvailableScps
+                    .Append(role)
+                    .ToArray();
+                Plugin.Instance.PlayersThatCanUseSwap = Plugin.Instance.PlayersThatCanUseSwap
+                    .Append(player)
+                    .ToArray();
+
+                player.SendConsoleMessage("Du hast nicht genug ZVC, um deine Rolle zu wechseln!", "red");
+                return;
+            }
+
+            Logger.Info("Swap-Anfrage erfolgreich (200 OK).");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Fehler beim Senden der Swap-Anfrage für {player.Nickname} ({player.UserId}): {ex}");
+
+            // Reset original state
+            Plugin.Instance.AvailableScps = Plugin.Instance.AvailableScps
+                .Append(role)
+                .ToArray();
+            Plugin.Instance.PlayersThatCanUseSwap = Plugin.Instance.PlayersThatCanUseSwap
+                .Append(player)
+                .ToArray();
+
+
+            player.SendConsoleMessage(
+                "Ein unerwarteter Fehler ist aufgetreten! Bitte versuche es in der nächsten Runde erneut.",
+                "red");
+            return;
+        }
+
+
+        player.SendConsoleMessage($"Rolle erfolgreich gewechselt! -{Plugin.Instance.RoleCosts[role]} ZVC");
         player.Role = role;
-        return true;
     }
 }
